@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タワーディフェンスゲーム - ドラッグ＆ドロップ版</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #222;
+      color: #fff;
+      font-family: sans-serif;
+      text-align: center;
+    }
+    #towerMenu {
+      background: #444;
+      padding: 10px;
+      text-align: center;
+    }
+    #towerMenu p {
+      margin: 5px 0;
+    }
+    #towerMenu img {
+      width: 40px;
+      height: 40px;
+      cursor: grab;
+      border: 2px solid #fff;
+      border-radius: 4px;
+    }
+    canvas {
+      background: #333;
+      display: block;
+      margin: 10px auto;
+      border: 2px solid #555;
+    }
+    #ui {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <!-- タワー選択メニュー -->
+  <div id="towerMenu">
+    <p>タワーをドラッグしてキャンバスに配置</p>
+    <!-- 画像が用意できない場合は、代替テキストで代用してください -->
+    <img id="towerIcon" src="tower_icon.png" alt="タワー" draggable="true">
+  </div>
+  
+  <!-- ゲームキャンバス -->
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  
+  <!-- UI -->
+  <div id="ui">
+    <button id="startBtn">ゲーム開始</button>
+    <span id="score">Score: 0 | Lives: 10 | Wave: 1</span>
+  </div>
+  
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const startBtn = document.getElementById("startBtn");
+    const scoreSpan = document.getElementById("score");
+    const towerIcon = document.getElementById("towerIcon");
+
+    // ゲームの基本パラメータ
+    let gameRunning = false;
+    let score = 0;
+    let lives = 10;
+    let wave = 1;
+    let enemies = [];
+    let towers = [];
+    let bullets = [];
+    let enemySpawnInterval = 2000; // 敵の出現間隔（ミリ秒）
+    let lastEnemySpawn = performance.now();
+
+    // 敵が通る経路（ウェイポイントの配列）
+    const path = [
+      { x: 0, y: 300 },
+      { x: 200, y: 300 },
+      { x: 200, y: 100 },
+      { x: 600, y: 100 },
+      { x: 600, y: 400 },
+      { x: 800, y: 400 }
+    ];
+
+    // --- クラス定義 ---
+    class Enemy {
+      constructor() {
+        this.width = 20;
+        this.height = 20;
+        this.speed = 1 + wave * 0.2;
+        this.health = 100 + wave * 20;
+        this.maxHealth = this.health;
+        this.currentWaypoint = 0;
+        // 経路の最初の地点から開始
+        this.x = path[0].x;
+        this.y = path[0].y;
+      }
+      move(deltaTime) {
+        if (this.currentWaypoint >= path.length) return;
+        const target = path[this.currentWaypoint];
+        const dx = target.x - this.x;
+        const dy = target.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < 1) {
+          this.currentWaypoint++;
+          if (this.currentWaypoint >= path.length) {
+            // ゴールに到達：ライフを1減らす
+            lives--;
+            this.health = 0;
+            return;
+          }
+        } else {
+          const moveDist = this.speed * deltaTime;
+          this.x += (dx / distance) * moveDist;
+          this.y += (dy / distance) * moveDist;
+        }
+      }
+      draw() {
+        ctx.fillStyle = "red";
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        // ヘルスバーを描画
+        ctx.fillStyle = "green";
+        const barWidth = this.width * (this.health / this.maxHealth);
+        ctx.fillRect(this.x, this.y - 10, barWidth, 5);
+      }
+    }
+
+    class Tower {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.range = 100;
+        this.fireRate = 1; // 1秒あたりの発射回数
+        this.fireCooldown = 0;
+      }
+      draw() {
+        ctx.fillStyle = "blue";
+        // タワーは中心を基準に描画
+        ctx.fillRect(this.x - 10, this.y - 10, 20, 20);
+        // 射程範囲を半透明で描画（オプション）
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(0,0,255,0.3)";
+        ctx.stroke();
+      }
+      update(deltaTime) {
+        this.fireCooldown -= deltaTime;
+        if (this.fireCooldown <= 0) {
+          // 射程内の敵の中で最も近い敵をターゲットにする
+          let target = null;
+          let minDistance = Infinity;
+          for (let enemy of enemies) {
+            const dx = enemy.x - this.x;
+            const dy = enemy.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < this.range && distance < minDistance) {
+              target = enemy;
+              minDistance = distance;
+            }
+          }
+          if (target) {
+            bullets.push(new Bullet(this.x, this.y, target));
+            this.fireCooldown = 1 / this.fireRate;
+          }
+        }
+      }
+    }
+
+    class Bullet {
+      constructor(x, y, target) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.speed = 300; // 秒あたりのピクセル移動
+        this.damage = 50;
+        this.radius = 4;
+        this.hit = false;
+      }
+      move(deltaTime) {
+        const dx = this.target.x - this.x;
+        const dy = this.target.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < 5) {
+          this.target.health -= this.damage;
+          if (this.target.health <= 0) {
+            score += 10;
+            this.target.health = 0;
+          }
+          this.hit = true;
+          return;
+        }
+        const moveDist = this.speed * deltaTime;
+        this.x += (dx / distance) * moveDist;
+        this.y += (dy / distance) * moveDist;
+      }
+      draw() {
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // --- ドラッグ＆ドロップでタワー配置 ---
+    // towerIconのdragstartイベント
+    towerIcon.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", "tower");
+    });
+
+    // キャンバス側でdragoverイベント（ドロップを許可）
+    canvas.addEventListener("dragover", (e) => {
+      e.preventDefault();
+    });
+
+    // ドロップ時にタワーを配置
+    canvas.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      towers.push(new Tower(x, y));
+    });
+
+    // --- ゲームループ ---
+    let lastTime = performance.now();
+    function gameLoop(timestamp) {
+      const deltaTime = (timestamp - lastTime) / 1000;
+      lastTime = timestamp;
+      updateGame(deltaTime);
+      drawGame();
+      if (gameRunning && lives > 0) {
+        requestAnimationFrame(gameLoop);
+      } else if (lives <= 0) {
+        gameOverScreen();
+      }
+    }
+
+    function updateGame(deltaTime) {
+      // 敵の更新
+      enemies.forEach(enemy => enemy.move(deltaTime));
+      enemies = enemies.filter(enemy => enemy.health > 0);
+      
+      // タワーの更新
+      towers.forEach(tower => tower.update(deltaTime));
+      
+      // 弾丸の更新
+      bullets.forEach(bullet => bullet.move(deltaTime));
+      bullets = bullets.filter(bullet => !bullet.hit);
+      
+      // 敵の出現管理
+      if (performance.now() - lastEnemySpawn > enemySpawnInterval) {
+        enemies.push(new Enemy());
+        lastEnemySpawn = performance.now();
+      }
+      
+      // ウェーブシステム：敵が全滅したら次のウェーブへ
+      if (enemies.length === 0) {
+        wave++;
+        enemySpawnInterval = Math.max(500, enemySpawnInterval - 200);
+      }
+      
+      // UIの更新
+      scoreSpan.textContent = `Score: ${score} | Lives: ${lives} | Wave: ${wave}`;
+    }
+
+    function drawGame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // 敵が通る道（パス）を描画
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.stroke();
+      
+      towers.forEach(tower => tower.draw());
+      enemies.forEach(enemy => enemy.draw());
+      bullets.forEach(bullet => bullet.draw());
+    }
+
+    function gameOverScreen() {
+      ctx.fillStyle = "black";
+      ctx.font = "40px Arial";
+      ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
+    }
+
+    startBtn.addEventListener("click", () => {
+      if (!gameRunning) {
+        gameRunning = true;
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+      }
+    });
+  </script>
+</body>
+</html>

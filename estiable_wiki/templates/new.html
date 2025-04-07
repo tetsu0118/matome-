@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新規記事作成</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>新しい記事を書く</h1>
+        <form method="post" enctype="multipart/form-data">
+            <label for="title">タイトル：</label>
+            <input type="text" id="title" name="title" required>
+
+            <label for="content">内容：</label>
+            <textarea id="content" name="content" required></textarea>
+            
+            <label for="image" class="upload-button">画像を選択</label>
+            <input type="file" id="image" name="image" accept="image/*">
+
+            <input type="submit" value="投稿">
+        </form>
+        <a href="{{ url_for('index') }}" class="button">戻る</a>
+    </div>
+</body>
+</html>

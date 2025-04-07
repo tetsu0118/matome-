@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>記事編集</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>記事編集</h1>
+        <form method="post" enctype="multipart/form-data">
+            <label for="title">タイトル：</label>
+            <input type="text" id="title" name="title" value="{{ article[0] }}" required>
+
+            <label for="content">内容：</label>
+            <textarea id="content" name="content" required>{{ article[1] }}</textarea>
+            
+            <label for="image" class="upload-button">画像を選択</label>
+            <input type="file" id="image" name="image" accept="image/*">
+
+            <input type="submit" value="保存">
+        </form>
+        <a href="{{ url_for('view_article', article_id=article_id) }}" class="button">キャンセル</a>
+    </div>
+</body>
+</html>

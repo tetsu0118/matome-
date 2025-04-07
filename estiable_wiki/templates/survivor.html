@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ダダサバイバー風ゲーム</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #222;
+      color: #fff;
+      font-family: sans-serif;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    canvas {
+      background: #333;
+      display: block;
+      margin: 20px auto;
+      border: 2px solid #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>ダダサバイバー風ゲーム</h1>
+  <canvas id="gameCanvas" width="600" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // プレイヤーの設定（左右に移動）
+    const player = {
+      x: canvas.width / 2 - 20,
+      y: canvas.height - 60,
+      width: 40,
+      height: 40,
+      speed: 5,
+      dx: 0
+    };
+
+    // 障害物を格納する配列
+    let obstacles = [];
+    let obstacleInterval = 2000; // 障害物の生成間隔（ミリ秒）
+    let obstacleSpeed = 2;       // 障害物の落下速度
+    let score = 0;
+    let gameOver = false;
+
+    // 障害物を生成する関数
+    function spawnObstacle() {
+      const size = Math.random() * 30 + 20; // 20～50px
+      const x = Math.random() * (canvas.width - size);
+      const y = -size;
+      obstacles.push({ x, y, width: size, height: size });
+    }
+
+    // プレイヤーの描画
+    function drawPlayer() {
+      ctx.fillStyle = "cyan";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+    }
+
+    // 障害物の描画
+    function drawObstacles() {
+      ctx.fillStyle = "red";
+      obstacles.forEach(obstacle => {
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      });
+    }
+
+    // プレイヤーの移動
+    function movePlayer() {
+      player.x += player.dx;
+      // 画面外に出ないようにする
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > canvas.width)
+        player.x = canvas.width - player.width;
+    }
+
+    // 障害物の移動
+    function moveObstacles() {
+      obstacles.forEach(obstacle => {
+        obstacle.y += obstacleSpeed;
+      });
+      // 画面外に出た障害物は削除し、スコア加算
+      obstacles = obstacles.filter(obstacle => {
+        if (obstacle.y > canvas.height) {
+          score++;
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // 衝突判定（矩形同士の衝突判定）
+    function detectCollision(rect1, rect2) {
+      return rect1.x < rect2.x + rect2.width &&
+             rect1.x + rect1.width > rect2.x &&
+             rect1.y < rect2.y + rect2.height &&
+             rect1.y + rect1.height > rect2.y;
+    }
+
+    // 衝突チェック
+    function checkCollisions() {
+      obstacles.forEach(obstacle => {
+        if (detectCollision(player, obstacle)) {
+          gameOver = true;
+          alert("ゲームオーバー! スコア: " + score);
+          document.location.reload();
+        }
+      });
+    }
+
+    // ゲームの更新処理
+    function update() {
+      if (gameOver) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      movePlayer();
+      moveObstacles();
+      checkCollisions();
+      drawPlayer();
+      drawObstacles();
+
+      // スコア表示
+      ctx.fillStyle = "white";
+      ctx.font = "20px sans-serif";
+      ctx.fillText("Score: " + score, 10, 30);
+
+      requestAnimationFrame(update);
+    }
+
+    // 障害物生成の間隔と難易度上昇
+    let obstacleSpawner = setInterval(spawnObstacle, obstacleInterval);
+    setInterval(() => {
+      // ゲームが進むにつれて障害物の速度を上げる
+      obstacleSpeed += 0.2;
+      // 生成間隔が短くなれば、難易度は更に上がる
+      if (obstacleInterval > 500) {
+        obstacleInterval -= 100;
+        clearInterval(obstacleSpawner);
+        obstacleSpawner = setInterval(spawnObstacle, obstacleInterval);
+      }
+    }, 5000);
+
+    // キーイベントでプレイヤーを左右に移動
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") {
+        player.dx = player.speed;
+      } else if (e.key === "ArrowLeft") {
+        player.dx = -player.speed;
+      }
+    });
+
+    document.addEventListener("keyup", function (e) {
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        player.dx = 0;
+      }
+    });
+
+    // ゲーム開始
+    update();
+  </script>
+</body>
+</html>

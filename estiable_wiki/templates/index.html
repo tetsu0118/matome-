@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>市川学園 まとめサイト</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>市川学園 まとめサイト</h1>
+        <a href="{{ url_for('new_article') }}" class="button">新しい記事を書く</a>
+        <ul class="article-list">
+            {% for article in articles %}
+                <li class="article-item">
+                    <a href="{{ url_for('view_article', article_id=article[0]) }}">{{ article[1] }}</a>
+                    <form action="{{ url_for('delete_article', article_id=article[0]) }}" method="post" class="delete-form">
+                        <button class="delete-btn" type="submit" onclick="return confirm('この記事を削除しますか？')">削除</button>
+                    </form>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    <div class="container">
+        <a href="/game" class="button">恐竜ゲームはこちら</a>
+    </div>
+
+    <div class="container">
+        <a href="/survivor" class="button">ダダサバイバーはこちら</a>
+    </div>
+
+    <div class="container">
+        <a href="/defence" class="button">タワーディフェンスはこちら</a>
+    </div>
+</body>
+</html>
